@@ -7,6 +7,5 @@
 !/MDK-ARM/*.uvprojx
 !/MDK-ARM/*.uvptx
 !/MDK-ARM/**/*.uvprojx
-!/MDK-ARM/**/*.uvptx
 
 /*.ioc
