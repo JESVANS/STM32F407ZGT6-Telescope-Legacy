@@ -2,9 +2,10 @@
 *.ept
 *.eide-template
 
-# 仅控制 MDK-ARM 目录，不影响其它目录
-/MDK-ARM/**           # 忽略 MDK-ARM 下的所有内容
-!/MDK-ARM/**/         # 但允许遍历子目录
+# 忽略 MDK-ARM 中除 .uvprojx / .uvptx 之外所有内容（含子文件夹）
+/MDK-ARM/**
+!/MDK-ARM/*.uvprojx
+!/MDK-ARM/*.uvptx
 !/MDK-ARM/**/*.uvprojx
 !/MDK-ARM/**/*.uvptx
 
