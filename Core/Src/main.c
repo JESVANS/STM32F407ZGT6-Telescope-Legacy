@@ -27,6 +27,7 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
+#include <stdio.h>
 #include "string.h"
 #include "nt35510.h"
 #include "touch.h"
@@ -36,6 +37,8 @@
 #include "hc_sr04.h"
 #include "ssd1306.h"
 #include "bluetooth.h"
+#include "key.h"
+#include "dl_ln33.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -45,6 +48,8 @@
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
+
+#define DL_LOCAL_PORT 0x91  /* 本端默认源端口 (与注释示例一致) */
 
 /* USER CODE END PD */
 
@@ -62,6 +67,14 @@
   static volatile uint8_t  resp_updated = 0;
   const char *msg = "Hello from STM32!\r\n";
   char resp[128];
+  
+  static char key_evt_buf[32] = "";
+
+  static char g_tx_hex_str[128];
+  static char g_rx_hex_str[128];
+  static char g_decoded_str[128];
+  static uint8_t g_show_ln33 = 0;  // 是否当前有显示 3 行
+
 
 /* USER CODE END PV */
 
@@ -246,6 +259,59 @@ void ctp_test(void)
 }
 
 
+/* 将按键与事件类型转成字符串 */
+static const char* key_id_to_str(KeyID_t id)
+{
+    switch(id){
+      case KEY_WK_UP: return "WK_UP";
+      case KEY_UP:    return "UP";
+      case KEY_DOWN:  return "DOWN";
+      case KEY_LEFT:  return "LEFT";
+      case KEY_RIGHT: return "RIGHT";
+      case KEY_OK:    return "OK";
+      default:        return "NONE";
+    }
+}
+static const char* key_type_to_str(KeyEventType_t t)
+{
+    switch(t){
+      case KEY_EVT_PRESS:        return "PRESS";
+      case KEY_EVT_RELEASE:      return "RELEASE";
+      case KEY_EVT_CLICK:        return "CLICK";
+      case KEY_EVT_DOUBLE_CLICK: return "DBL";
+      case KEY_EVT_LONG_PRESS:   return "LONG";
+      default:                   return "";
+    }
+}
+/* 屏幕底部显示按键事件 */
+static void show_key_event(const KeyEvent_t *ev)
+{
+    if(!ev) return;
+    snprintf(key_evt_buf, sizeof(key_evt_buf), "%s %s",
+    key_id_to_str(ev->id), key_type_to_str(ev->type));
+    
+    /* 清除显示区域 (根据实际屏幕宽度调整) */
+    lcd_fill(120, 700, 340, 732, BLACK);
+    lcd_show_string(120, 700, 220, 32, 32, key_evt_buf, CYAN);
+}
+
+
+/* 将字节数组转成十六进制字符串，如 "FE 08 91 90 ..." */
+static void bytes_to_hex_str(const uint8_t *buf, uint16_t len, char *out, uint16_t out_size)
+{
+    uint16_t pos = 0;
+    for (uint16_t i = 0; i < len; ++i) {
+        if (pos + 3 >= out_size) break;
+        int n = snprintf(&out[pos], out_size - pos, "%02X", buf[i]);
+        pos += (uint16_t)n;
+        if (i != len - 1 && pos + 1 < out_size) {
+            out[pos++] = ' ';
+        }
+    }
+    if (pos < out_size) out[pos] = '\0';
+}
+
+
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -302,6 +368,8 @@ int main(void)
   int number = 0;
 
   BT_Init(NULL);
+  HC_SR04_Init(GPIOG, GPIO_PIN_6, GPIOG, GPIO_PIN_7, GPIO_NOPULL);
+  KEY_Init();
 
   
 
@@ -309,6 +377,7 @@ int main(void)
     float H = 10;
     float L = 0;
     float P = 0;
+    float A = 0;
     float D = 0;
 
 
@@ -322,6 +391,7 @@ int main(void)
     lcd_show_string(64, 96, 220, 32, 32, "PRESS:      Pa", MAGENTA);
     lcd_show_string(64, 128, 160, 32, 32, "ALTI:    m", MAGENTA);
     lcd_show_string(64, 160, 220, 32, 32, "LIGHT:      lx", MAGENTA);
+    lcd_show_string(64, 192, 220, 32, 32, "DIST:    cm", MAGENTA);
 
     if(SHT30_Check())
     {
@@ -337,12 +407,12 @@ int main(void)
     if(BMP280_Init() == BMP280_OK)
     {
       BMP280_ReadTempPressure(&T, &P);
-      D = (int)BMP280_CalcAltitude(P, 101325.0f);
+      A = (int)BMP280_CalcAltitude(P, 101325.0f);
     }
     else
     {
       P = -1;
-      D = -1;
+      A = -1;
       HAL_GPIO_TogglePin(GPIOF, GPIO_PIN_10);
     }
 
@@ -367,6 +437,37 @@ int main(void)
   while (1)
   {
 
+    static uint32_t prev = 0;
+    if (HAL_GetTick() - prev >= 10) {
+        prev = HAL_GetTick();
+        KEY_Update();
+        KeyEvent_t ev;
+        while (KEY_GetEvent(&ev)) {
+          // 根据 ev.id 和 ev.type 做处理
+          show_key_event(&ev);
+        
+          /* 单击“下键”清除刚刚 3 行显示 */
+          if (ev.id == KEY_DOWN && ev.type == KEY_EVT_RELEASE) {
+              if (g_show_ln33) {
+                        uint16_t line_h = 16;
+                        uint16_t total_h = line_h * 3;
+                        uint16_t y0 = (lcddev.height > total_h) ?
+                                      (lcddev.height - total_h) / 2 : 0;
+                        lcd_fill(0, y0, lcddev.width - 1,
+                                 y0 + total_h - 1, BLACK);
+                        g_show_ln33 = 0;
+                }
+            }     
+        }
+    }
+
+
+
+
+    
+
+    
+        
      static uint32_t tick_prev = 0;
     if (HAL_GetTick() - tick_prev >= 1000)
     {
@@ -378,12 +479,13 @@ int main(void)
         }
         if (BT_GetState(NULL) == BT_CONNECTED)
         {
-            BT_Send(NULL, (const uint8_t*)msg, (uint16_t)strlen(msg), 200);
-            BT_SendAT(NULL, "AT+VERSION\r\n", NULL, 0, 500);
+            //BT_Send(NULL, (const uint8_t*)msg, (uint16_t)strlen(msg), 200);
+            //BT_SendAT(NULL, "AT+VERSION\r\n", NULL, 0, 500);
         }
         BMP280_ReadTempPressure(&T, &P);
-        D = (int)BMP280_CalcAltitude(P, 101325.0f);
+        A = (int)BMP280_CalcAltitude(P, 101325.0f);
         BH1750_ReadLux(&L);
+        HC_SR04_Measure(NULL, &D);
     }
 
      if (resp_updated)   /* 有新完整消息 */
@@ -404,8 +506,9 @@ int main(void)
     lcd_show_xnum(150, 32, T, 2, 32, 0, MAGENTA);
     lcd_show_xnum(150, 64, H, 2, 32, 0, MAGENTA);
     lcd_show_xnum(170, 96, P, 5, 32, 0, MAGENTA);
-    lcd_show_xnum(150, 128, D, 3, 32, 0, MAGENTA);
+    lcd_show_xnum(150, 128, A, 3, 32, 0, MAGENTA);
     lcd_show_xnum(170, 160, L, 5, 32, 0, MAGENTA);
+    lcd_show_xnum(150, 192, D, 3, 32, 0, MAGENTA);
 
 
     
