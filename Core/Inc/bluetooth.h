@@ -64,7 +64,7 @@ BT_Status_t BT_DeInit(BT_Handle_t *hbt);
 /* 发送透传数据（EN 必须为低） */
 BT_Status_t BT_Send(BT_Handle_t *hbt, const uint8_t *data, uint16_t len, uint32_t timeout_ms);
 
-/* 阻塞接收透传数据（简易版本，直接调用 HAL 阻塞接收） */
+/* 接收透传数据 */
 BT_Status_t BT_Receive(BT_Handle_t *hbt, uint8_t *buf, uint16_t len, uint32_t timeout_ms);
 
 /* 读取连接状态（直接读 STATE 引脚） */

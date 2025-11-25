@@ -1,68 +1,133 @@
 #ifndef __DL_LN33_H__
 #define __DL_LN33_H__
 
-#include "stm32f4xx_hal.h"
-#include <stdint.h>
-
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-/* 默认使用 USART2（在 usart.c 中已定义 huart2） */
-extern UART_HandleTypeDef huart2;
+#include <stdint.h>
+#include "stm32f4xx_hal.h"
+#include "usart.h"
 
-/* 最近一次发送/接收的原始帧（包含 FE ... FF），供调试显示 */
-extern uint8_t  g_dl_last_tx_raw[];
-extern uint16_t g_dl_last_tx_len;
-extern uint8_t  g_dl_last_rx_raw[];
-extern uint16_t g_dl_last_rx_len;
-
-/* 返回状态 */
+/**
+ * @brief DL-LN33 模块操作状态枚举
+ */
 typedef enum {
-    DL_OK = 0,
-    DL_ERR_PARAM,
-    DL_ERR_PORT_RANGE,   // 端口号不在 0x80~0xFF
-    DL_ERR_UART,
-    DL_ERR_TIMEOUT,
-    DL_ERR_FORMAT        // 帧格式/长度/转义错误
+    DL_OK = 0,      // 操作成功
+    DL_ERROR,       // 通用错误
+    DL_TIMEOUT,     // 超时
+    DL_INVALID,     // 参数无效
+    DL_BUSY         // 忙碌
 } DL_Status_t;
 
-/**
- * @brief 封包并发送到 DL-LN3X 模块
- * @param src_port    源端口号 (0x80~0xFF，<0x80 包无法发出)
- * @param dst_port    目标端口号 (0x80~0xFF，<0x80 由模块内部处理)
- * @param remote_addr 远程地址 (0x0000=本模块, 0xFFFF=广播, 其它=目标模块地址，小端发送)
- * @param payload     要发送的数据缓冲区
- * @param payload_len 数据长度（未转义前的原始长度）
- * @retval DL_OK / DL_ERR_PARAM / DL_ERR_PORT_RANGE / DL_ERR_UART
- */
-DL_Status_t DL_LN33_SendPacket(uint8_t src_port,
-                               uint8_t dst_port,
-                               uint16_t remote_addr,
-                               const uint8_t *payload,
-                               uint16_t payload_len);
+/* 默认使用的串口句柄，若未定义则使用 huart2 */
+#ifndef DL_LN33_DEFAULT_UART
+#define DL_LN33_DEFAULT_UART      (&huart2)
+#endif
 
-/* 解析后的接收结果 */
+/* 默认波特率，硬件固定为 115200 */
+#ifndef DL_LN33_DEFAULT_BAUDRATE
+#define DL_LN33_DEFAULT_BAUDRATE  115200U 
+#endif
+
+/**
+ * @brief DL-LN33 数据包结构体 (解包后的应用层数据)
+ */
 typedef struct {
-    uint8_t  src_port;
-    uint8_t  dst_port;
-    uint16_t remote_addr;          // 小端还原后的地址
-    uint8_t  data[256];            // 反转义后的数据
-    uint16_t data_len;             // 有效数据长度
+    uint16_t addr;      // 远程地址 (0x0000: 本模块, 0xFFFF: 广播)
+    uint8_t  src;       // 源端口号
+    uint8_t  dst;       // 目的端口号
+    uint8_t  data[128]; // 数据载荷
+    uint16_t data_len;  // 数据长度
 } DL_Packet_t;
 
+/* ================= API 函数声明 ================= */
+
 /**
- * @brief  从模块接收一帧并解析
- *         帧格式: FE LEN src dst addrL addrH DATA... FF
- *         LEN 为 src~addrH~DATA 的字节数 (未转义前, =4+payload_len)
- * @param  pkt       输出结构体指针
- * @param  timeoutMs 整帧超时时间
- * @retval DL_OK / DL_ERR_TIMEOUT / DL_ERR_FORMAT / DL_ERR_UART
+ * @brief 初始化 DL-LN33 模块的中断接收
+ * @note  需要在 main 初始化阶段调用，启动 UART 接收中断
  */
-DL_Status_t DL_LN33_RecvPacket(DL_Packet_t *pkt, uint32_t timeoutMs);
+void DL_LN33_InitIT(void);
+
+/**
+ * @brief 构建发送帧 (封包)
+ * @param src 源端口
+ * @param dst 目的端口
+ * @param addr 远程地址
+ * @param payload 数据载荷指针
+ * @param payload_len 数据长度
+ * @param frame_out [输出] 指向构建好的原始帧缓冲区的指针
+ * @param frame_len_out [输出] 构建好的帧长度
+ * @return DL_Status_t
+ */
+DL_Status_t DL_LN33_BuildFrame(uint8_t src, uint8_t dst, uint16_t addr,
+                               const uint8_t *payload, uint16_t payload_len,
+                               uint8_t **frame_out, uint16_t *frame_len_out);
+
+/**
+ * @brief 阻塞式发送数据包 (自动封包并发送)
+ * @param src 源端口
+ * @param dst 目的端口
+ * @param addr 远程地址
+ * @param payload 数据载荷
+ * @param payload_len 数据长度
+ * @return DL_Status_t
+ */
+DL_Status_t DL_LN33_SendPacket(uint8_t src, uint8_t dst, uint16_t addr,
+                               const uint8_t *payload, uint16_t payload_len);
+
+/**
+ * @brief 中断式发送原始帧 (非阻塞)
+ * @param huart 串口句柄 (传 NULL 则使用默认)
+ * @param frame 原始帧数据指针
+ * @param length 帧长度
+ * @return DL_Status_t
+ */
+DL_Status_t DL_LN33_SendFrameIT(UART_HandleTypeDef *huart,
+                                const uint8_t *frame,
+                                uint16_t length);
+
+/**
+ * @brief 阻塞式接收并解析数据包
+ * @param pkt [输出] 解析后的数据包结构体
+ * @param timeout_ms 超时时间 (毫秒)
+ * @return DL_Status_t
+ */
+DL_Status_t DL_LN33_RecvPacket(DL_Packet_t *pkt, uint32_t timeout_ms);
+
+/* ================= 中断回调辅助函数 ================= */
+
+/**
+ * @brief 串口接收中断处理函数 (需在 HAL_UART_RxCpltCallback 中调用)
+ * @param byte 接收到的单个字节
+ */
+void        DL_LN33_RxByteIT(uint8_t byte);
+
+/**
+ * @brief 查询是否接收到完整的一帧数据
+ * @return 1: 有新帧, 0: 无
+ */
+uint8_t     DL_LN33_IsRxFrameReady(void);
+
+/**
+ * @brief 获取接收到的原始帧数据
+ * @param buf [输出] 缓冲区
+ * @param buf_len 缓冲区大小
+ * @return 实际拷贝的字节数
+ */
+uint16_t    DL_LN33_GetRxFrame(uint8_t *buf, uint16_t buf_len);
+
+/* ================= 接收字节处理函数 ================= */
+/* 将字节数组转成十六进制字符串，如 "FE 08 91 90 ..." */
+void bytes_to_hex_str(const uint8_t *buf, uint16_t len, char *out, uint16_t out_size);
+/* 提取包中实际数据 */
+void DL_LN33_Read_data(const uint8_t *buf, uint16_t len, DL_Packet_t *repkt);
+
 
 #ifdef __cplusplus
 }
 #endif
 
-#endif /* __DL_LN33_H__ */
+#endif
+
+

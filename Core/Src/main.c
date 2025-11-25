@@ -21,6 +21,7 @@
 #include "adc.h"
 #include "dcmi.h"
 #include "i2c.h"
+#include "spi.h"
 #include "usart.h"
 #include "gpio.h"
 #include "fsmc.h"
@@ -65,15 +66,19 @@
   static volatile uint8_t  bt_rx_byte;      /* 单字节中断接收缓冲 */
   static volatile uint16_t resp_len = 0;
   static volatile uint8_t  resp_updated = 0;
-  const char *msg = "AT+DISC\r\n";
+  const char *msg = "HELLO FROM STM32 !";
+  const uint8_t pkg[128] = {0};
+  const uint8_t content[] = {123};
+
+
   char resp[128];
   
   static char key_evt_buf[32] = {0};
 
-/* 用来显示蓝牙消息的缓冲区 */
-extern char bt_disp_buf[128];             // 屏幕显示用的缓冲
-extern uint8_t bt_has_new;                 // 标记是否有新消息待显示
+/* 用来显示串口消息的缓冲区 */
+extern char disp_buf[128];             // 屏幕显示用的缓冲
 extern uint8_t bt_line_idx;               // 当前行缓冲索引
+extern uint8_t usart2_has_new;                 // 标记是否有新消息待显示
 
 
 /* USER CODE END PV */
@@ -296,20 +301,6 @@ static void show_key_event(const KeyEvent_t *ev)
 }
 
 
-/* 将字节数组转成十六进制字符串，如 "FE 08 91 90 ..." */
-static void bytes_to_hex_str(const uint8_t *buf, uint16_t len, char *out, uint16_t out_size)
-{
-    uint16_t pos = 0;
-    for (uint16_t i = 0; i < len; ++i) {
-        if (pos + 3 >= out_size) break;
-        int n = snprintf(&out[pos], out_size - pos, "%02X", buf[i]);
-        pos += (uint16_t)n;
-        if (i != len - 1 && pos + 1 < out_size) {
-            out[pos++] = ' ';
-        }
-    }
-    if (pos < out_size) out[pos] = '\0';
-}
 
 /* 屏幕中间显示蓝牙消息（居中显示） */
 static void LCD_ShowBTMessageCenter(const char *s)
@@ -379,21 +370,26 @@ int main(void)
   MX_USART3_UART_Init();
   MX_ADC1_Init();
   MX_DCMI_Init();
-  //MX_FSMC_Init();
+  //MX_FSMC_Init();         //记得注释这一句
+  //MX_SPI3_Init();
   /* USER CODE BEGIN 2 */
   HAL_GPIO_WritePin(GPIOC, GPIO_PIN_5, GPIO_PIN_SET); // 错误指示灯熄灭
   lcd_init();
   lcd_clear(BLACK);
 
-  ssd1306_Init();
-  ssd1306_Fill(0);
-  ssd1306_SetCursor(0, 0);
-  ssd1306_WriteString(0, 0, "Hello World");
-  ssd1306_UpdateScreen();
+  // ssd1306_Init();
+  // ssd1306_Fill(0);
+  // ssd1306_SetCursor(0, 0);
+  // ssd1306_WriteString(0, 0, "Hello World");
+  // ssd1306_UpdateScreen();
   int number = 0;
 
-  BT_Init(NULL);
-  UART_IT_StartRecv(hBluetooth.huart, 1);
+  // BT_Init(NULL);
+  // UART_IT_StartRecv(hBluetooth.huart, 1);
+  DL_LN33_InitIT();
+
+
+
   HC_SR04_Init(GPIOG, GPIO_PIN_6, GPIOG, GPIO_PIN_7, GPIO_NOPULL);
   KEY_Init();
 
@@ -470,11 +466,11 @@ int main(void)
           // 根据 ev.id 和 ev.type 做处理
           show_key_event(&ev);
         
-          /* 单击“下键”清除显示 */
+          /* 单击“下键” */
           if (ev.id == KEY_DOWN && ev.type == KEY_EVT_RELEASE) {
-              
-            }     
+                 
         }
+      }
     }
 
 
@@ -484,7 +480,7 @@ int main(void)
 
     
         
-     static uint32_t tick_prev = 0;
+    static uint32_t tick_prev = 0;
     if (HAL_GetTick() - tick_prev >= 1000)
     {
         tick_prev = HAL_GetTick();
@@ -498,15 +494,37 @@ int main(void)
         BH1750_ReadLux(&L);
         HC_SR04_Measure(NULL, &D);
         //BT_Send(&hBluetooth, (const uint8_t*)msg, strlen(msg), 500);
-        //BT_SendAT(&hBluetooth, "AT+VERSION\r\n", NULL, 0, 1000);
-        
+        //HAL_UART_Transmit_IT(&huart2,pkg,8);
+       //DL_LN33_SendPacket(DL_LOCAL_PORT, 0x90, 0xbd1d, content, 1);
+
+       uint8_t *frame = NULL;
+       uint16_t frame_len = 0;
+       DL_LN33_BuildFrame(DL_LOCAL_PORT, 0x90, 0xbd1d, content, sizeof(content), &frame, &frame_len);
+       //DL_LN33_SendFrameIT(DL_LN33_DEFAULT_UART, frame, frame_len);
+
+
+    } 
+    
+    /* === 检查是否有 LN33 模块发来的完整帧 === */
+    if (DL_LN33_IsRxFrameReady()) {
+        uint8_t raw_frame[128];
+        uint16_t rlen = DL_LN33_GetRxFrame(raw_frame, sizeof(raw_frame));
+        if (rlen > 0) {
+            /* 把原始帧转成十六进制字符串，例如 "FE 05 91 21 00 00 01 FF" */
+            bytes_to_hex_str(raw_frame, rlen, disp_buf, sizeof(disp_buf));
+            DL_Packet_t receive_pkg;
+            DL_LN33_Read_data(raw_frame, rlen, &receive_pkg);  // 提取包中实际数据
+            lcd_show_string(10, 700, 400, 32, 24, "Received LN33 Packet Data:", MAGENTA);
+            lcd_show_xnum(350, 700, receive_pkg.data[0], 5, 24, 0, MAGENTA); //以十进制显示数据
+            usart2_has_new = 1;   // 通知下面的显示逻辑更新屏幕
+        }
     }
 
 
-    if (bt_has_new)
+    if (usart2_has_new)
     {
-        bt_has_new = 0;
-        LCD_ShowBTMessageCenter(bt_disp_buf);   // 屏幕显示收到的内容
+        usart2_has_new = 0;
+        LCD_ShowBTMessageCenter(disp_buf);   // 屏幕显示收到的内容
     }
 		
      

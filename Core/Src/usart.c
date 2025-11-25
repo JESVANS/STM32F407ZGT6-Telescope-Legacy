@@ -25,13 +25,14 @@
 #include <stdarg.h>
 #include <stdio.h>
 #include "bluetooth.h"
+#include "dl_ln33.h"
 #define UART_PRINTF_BUF_SIZE 256
 
 
-char bt_disp_buf[128] = {0};
-uint8_t bt_has_new = 0;
+char disp_buf[128] = {0};
 char bt_line_buf[128] = {0};
 uint8_t bt_line_idx = 0;
+uint8_t usart2_has_new = 0;
 
 /* ==== USARTx 中断收发相关（1/2/3 通用） ==== */
 
@@ -417,8 +418,8 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
 
     /* ===== 针对蓝牙（默认使用 USART2）的应用层钩子 ===== */
     if (huart == BT_DEFAULT_UART) {
-        extern char bt_disp_buf[128];
-        extern uint8_t bt_has_new;
+        extern char disp_buf[128];
+        extern uint8_t usart2_has_new;
 
         /* 这里我们是按 1 字节接收的 */
         uint8_t ch = uart2_rx_buf[0];
@@ -428,9 +429,9 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
         } else if (ch == '\n') {
             /* 一行结束，拷贝到显示缓冲 */
             bt_line_buf[bt_line_idx] = '\0';
-            strncpy(bt_disp_buf, bt_line_buf, sizeof(bt_disp_buf) - 1);
-            bt_disp_buf[sizeof(bt_disp_buf) - 1] = '\0';
-            bt_has_new = 1;
+            strncpy(disp_buf, bt_line_buf, sizeof(disp_buf) - 1);
+            disp_buf[sizeof(disp_buf) - 1] = '\0';
+            usart2_has_new = 1;
             bt_line_idx = 0;  // 清空，准备下一行
         } else {
             /* 普通字符，累加到当前行（防溢出） */
@@ -442,6 +443,16 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
         /* 继续下一次接收（按你期望长度，可改成固定 N 字节） */
         UART_IT_StartRecv(huart, 1);
     }
+
+    /* 3. LN33 协议单字节输入（默认也在 USART2 上） */
+    if (huart == DL_LN33_DEFAULT_UART) {
+        /* 将当前收到的 1 字节喂给 LN33 状态机 */
+        uint8_t ch = uart2_rx_buf[0];
+        DL_LN33_RxByteIT(ch);
+        /* 注意：若上面 BT_DEFAULT_UART 与 DL_LN33_DEFAULT_UART 相同，
+           这里会再次喂相同字节，这是允许的，因为你要的就是“同一串口既接 LN33，又显示”。 */
+    }
+    
 
 }
 /* USER CODE END 1 */
