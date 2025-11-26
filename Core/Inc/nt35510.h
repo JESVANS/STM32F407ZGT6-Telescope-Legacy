@@ -211,6 +211,17 @@ void lcd_show_string(uint16_t x, uint16_t y, uint16_t width, uint16_t height, ui
 //RGB调色盘, R:0--0x1F(31), G:0--0x3F(63), B:0--0x1F(31)
 uint16_t RGB565_color(uint16_t R, uint16_t G, uint8_t B);
 
+/**
+ * @brief 根据名称显示图像（8bit 像素），内部在本文件中匹配数据数组
+ * @param x      屏幕左上角 X 坐标
+ * @param y      屏幕左上角 Y 坐标
+ * @param w      显示宽度（像素）
+ * @param h      显示高度（像素）
+ * @param name   图片名称字符串，例如 "logo_cdtu"
+ */
+void LCD_ShowImage(uint16_t x, uint16_t y,
+                         uint16_t w, uint16_t h,
+                         const char *name);
 
 #ifdef __cplusplus
 }

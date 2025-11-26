@@ -1,6 +1,8 @@
 #include "nt35510.h"
 #include "stm32f4xx_hal.h"
 #include "font.h"
+#include "image.h"
+#include "string.h"
 
 SRAM_HandleTypeDef hsram4;
 
@@ -467,7 +469,7 @@ void lcd_ex_nt35510_reginit(void)
 
 /* LCD的画笔颜色和背景色 */
 uint32_t g_point_color = 0xF800;    /* 画笔颜色 */
-uint32_t g_back_color  = 0x0000;    /* 背景色 */
+uint32_t g_back_color  = 0xffff;    /* 背景色 */
 
 /* 管理LCD重要参数 */
 _lcd_dev lcddev;
@@ -833,6 +835,7 @@ void lcd_clear(uint16_t color)
     {
         LCD->LCD_RAM = color;
     }
+    g_back_color = color;
 }
 
 void lcd_fill(uint16_t sx, uint16_t sy, uint16_t ex, uint16_t ey, uint32_t color)
@@ -1167,3 +1170,54 @@ uint16_t RGB565_color(uint16_t R, uint16_t G, uint8_t B)
 
     return color;
 }
+
+
+/**
+ * @brief 根据图片名称在 image.h 中匹配数组并显示
+ */
+void LCD_ShowImage(uint16_t x, uint16_t y,
+                         uint16_t w, uint16_t h,
+                         const char *name)
+{
+    if (name == NULL) return;
+
+    const uint8_t *data = NULL;
+
+    /* ===== 在这里按名称匹配你在 image.h 中声明的数组 ===== */
+    if (strcmp(name, "logo_cdtu") == 0)
+    {
+        /* logo_cdtu 长度 21700 = 310 * 70，正好一张 310x70 图 */
+        data = (const uint8_t *)logo_cdtu;
+        /* 如果调用时 w,h 不等于 310x70，也按你传入的 w,h 来裁剪/拉伸，
+           所以这里不强制修改 w,h，只是说明一下原始尺寸。*/
+    }
+    else
+    {
+        /* 未找到该名称的图像，直接返回 */
+        return;
+    }
+
+    /* 通过通用核心函数显示 */
+      if (data == NULL) return;
+
+    uint32_t idx = 0;
+
+    for (uint16_t j = 0; j < h; j++)
+    {
+        for (uint16_t i = 0; i < w; i++)
+        {
+            uint8_t g = data[idx++];   // 0~255 灰度
+            
+            // // 灰度映射到 RGB565（R5 G6 B5）
+            // uint16_t r  = (g >> 3) & 0x1F;   // 5 bit
+            // uint16_t g6 = (g >> 2) & 0x3F;   // 6 bit
+            // uint16_t b  = (g >> 3) & 0x1F;   // 5 bit
+            // uint16_t color = (r << 11) | (g6 << 5) | b;
+
+            lcd_draw_point(x + i, y + j, g);
+        }
+    }
+}
+
+
+

@@ -376,6 +376,12 @@ int main(void)
   HAL_GPIO_WritePin(GPIOC, GPIO_PIN_5, GPIO_PIN_SET); // 错误指示灯熄灭
   lcd_init();
   lcd_clear(BLACK);
+  
+  tp_init();
+  uint8_t t = 0;
+  uint8_t i = 0;
+  uint16_t lastpos[10][2];        /* 最后一次的数据 */
+  uint8_t maxp = 5;
 
   // ssd1306_Init();
   // ssd1306_Fill(0);
@@ -404,8 +410,10 @@ int main(void)
 
 
 
-  //if (lcddev.id == 0x1018) maxp = 10;
 
+
+    LCD_ShowImage(85, 30, 310, 70, "logo_cdtu");
+    //LCD_ShowImage(85, 30, 230, 60, "logo_cdtu2");
 
     lcd_show_string(64, 32, 160, 32, 32,"Temp:   C", MAGENTA);
     // lcd_show_string(0,48,160,16,16,"Humi:    %", MAGENTA);
@@ -414,6 +422,10 @@ int main(void)
     lcd_show_string(64, 128, 160, 32, 32, "ALTI:    m", MAGENTA);
     lcd_show_string(64, 160, 220, 32, 32, "LIGHT:      lx", MAGENTA);
     lcd_show_string(64, 192, 220, 32, 32, "DIST:    cm", MAGENTA);
+
+    lcd_fill(85, 200, 395, 270, YELLOW);
+
+
 
     if(SHT30_Check())
     {
@@ -450,6 +462,7 @@ int main(void)
 
 
 
+
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -457,6 +470,7 @@ int main(void)
   while (1)
   {
 
+    
     static uint32_t prev = 0;
     if (HAL_GetTick() - prev >= 10) {
         prev = HAL_GetTick();
@@ -563,6 +577,39 @@ int main(void)
 
     //HAL_Delay(1000);
 
+    tp_dev.scan(0);
+
+        for (t = 0; t < maxp; t++)
+        {
+            if ((tp_dev.sta) & (1 << t))
+            {
+                if (tp_dev.x[t] < lcddev.width && tp_dev.y[t] < 540)  /* 坐标在屏幕范围内 */
+                {
+                    if (lastpos[t][0] == 0xFFFF)
+                    {
+                        lastpos[t][0] = tp_dev.x[t];
+                        lastpos[t][1] = tp_dev.y[t];
+                    }
+
+                    lcd_draw_bline(lastpos[t][0], lastpos[t][1], tp_dev.x[t], tp_dev.y[t], 2, POINT_COLOR_TBL[t]); /* 画线 */
+                    lastpos[t][0] = tp_dev.x[t];
+                    lastpos[t][1] = tp_dev.y[t];
+
+                    if (tp_dev.x[t] > (lcddev.width - 24) && tp_dev.y[t] < 20)
+                    {
+                        load_draw_dialog();/* 清除 */
+                    }
+                }
+            }
+            else 
+            {
+                lastpos[t][0] = 0xFFFF;
+            }
+        }
+
+       HAL_Delay(5);
+        i++;
+        if (i % 20 == 0) HAL_GPIO_TogglePin(GPIOF, GPIO_PIN_9); /* 每100ms翻转一次LED */
     
 
 
