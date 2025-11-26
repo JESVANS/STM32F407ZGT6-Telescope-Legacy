@@ -5,7 +5,7 @@
 # 忽略 MDK-ARM 中除 .uvprojx / .uvptx 之外所有内容（含子文件夹）
 /MDK-ARM/**
 !/MDK-ARM/*.uvprojx
-!/MDK-ARM/*.uvptx
-!/MDK-ARM/**/*.uvprojx
+!/MDK-ARM/*.sct
+!/MDK-ARM/*.s
 
 /*.ioc
