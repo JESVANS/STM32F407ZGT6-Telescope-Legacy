@@ -236,6 +236,158 @@ void lcd_draw_bline(uint16_t x1, uint16_t y1, uint16_t x2, uint16_t y2, uint8_t 
     }
 }
 
+/**
+ * @brief 在指定位置画一个“返回”图标：矩形 + 向左箭头
+ * @param x,y  图标左上角坐标
+ * @param w,h  图标宽高
+ */
+void lcd_draw_back_icon(uint16_t x, uint16_t y,
+                        uint16_t w, uint16_t h)
+{
+    if (w < 10 || h < 10) return;
+
+    uint16_t border_color = WHITE;                   // 边框颜色
+    uint16_t fill_color   = RGB565_color(10,10,10);  // 背景填充色（深灰）
+    uint16_t arrow_color  = YELLOW;                 // 箭头颜色
+
+    /* 1. 画外框矩形（边框） */
+    lcd_draw_rectangle(x, y, x + w, y + h, border_color);
+
+    /* 2. 内部填充 */
+    uint16_t inner_left   = x + 2;
+    uint16_t inner_top    = y + 2;
+    uint16_t inner_right  = x + w - 2;
+    uint16_t inner_bottom = y + h - 2;
+    lcd_fill(inner_left, inner_top, inner_right, inner_bottom, fill_color);
+
+    /* 3. 画向左箭头：左边竖线 + 右侧实心三角形 */
+
+    // 3.1 竖直线（箭杆），居中放在内矩形的 1/3 处
+    uint16_t mid_y   = (inner_top + inner_bottom) / 2;
+    uint16_t line_x  = inner_left + (w / 6);  // 离左边一点
+    uint16_t line_top    = inner_top  + h / 6;
+    uint16_t line_bottom = inner_bottom - h / 6;
+
+    for (uint16_t yy = line_top; yy <= line_bottom; yy++) {
+        lcd_draw_point(line_x, yy, arrow_color);
+        lcd_draw_point(line_x + 1, yy, arrow_color);   // 稍微加粗
+    }
+
+    // 3.2 实心三角箭头：尖端在左，底边在中间偏右
+    uint16_t tri_tip_x = inner_left + w / 6;           // 和竖线差不多对齐
+    uint16_t tri_tip_y = mid_y;
+
+    uint16_t tri_base_x = inner_right - w / 8;         // 底边靠右
+    uint16_t tri_half_h = h / 4;                       // 半高
+
+    uint16_t tri_base_y1 = mid_y - tri_half_h;
+    uint16_t tri_base_y2 = mid_y + tri_half_h;
+
+    /* 用扫描线填充三角形：从尖端到底边，逐列画竖线 */
+    for (uint16_t xx = tri_tip_x; xx <= tri_base_x; xx++) {
+        // t 表示当前列在 [尖端, 底边] 的插值位置
+        float t = 0.0f;
+        if (tri_base_x != tri_tip_x) {
+            t = (float)(xx - tri_tip_x) / (float)(tri_base_x - tri_tip_x);
+        }
+
+        // 当前列对应的上下边界（线性插值）
+        uint16_t cur_y1 = (uint16_t)(tri_tip_y  + t * (tri_base_y1 - tri_tip_y));
+        uint16_t cur_y2 = (uint16_t)(tri_tip_y  + t * (tri_base_y2 - tri_tip_y));
+
+        if (cur_y1 > cur_y2) {
+            uint16_t tmp = cur_y1;
+            cur_y1 = cur_y2;
+            cur_y2 = tmp;
+        }
+
+        if (cur_y1 < inner_top)    cur_y1 = inner_top;
+        if (cur_y2 > inner_bottom) cur_y2 = inner_bottom;
+
+        for (uint16_t yy = cur_y1; yy <= cur_y2; yy++) {
+            lcd_draw_point(xx, yy, arrow_color);
+        }
+    }
+}
+
+/**
+ * @brief 在指定位置画一个“刷新”图标：矩形 + 循环箭头
+ * @param x,y  图标左上角坐标
+ * @param w,h  图标宽高
+ */
+void lcd_draw_refresh_icon(uint16_t x, uint16_t y,
+                           uint16_t w, uint16_t h)
+{
+    if (w < 16 || h < 16) return;
+
+    uint16_t border_color = RED;                   // 边框颜色
+    uint16_t fill_color   = RGB565_color(10,10,10);  // 深灰背景
+    uint16_t arrow_color  = YELLOW;                  // 刷新箭头颜色
+
+    /* 1. 外框矩形 */
+    lcd_draw_rectangle(x, y, x + w, y + h, border_color);
+
+    /* 2. 内部填充 */
+    uint16_t inner_left   = x + 2;
+    uint16_t inner_top    = y + 2;
+    uint16_t inner_right  = x + w - 2;
+    uint16_t inner_bottom = y + h - 2;
+    lcd_fill(inner_left, inner_top, inner_right, inner_bottom, fill_color);
+
+    /* 3. 计算圆心和半径（适配宽高） */
+    uint16_t cx = (inner_left + inner_right) / 2;
+    uint16_t cy = (inner_top + inner_bottom) / 2;
+    uint16_t r  = ( (inner_right - inner_left) < (inner_bottom - inner_top)
+    ? (inner_right - inner_left)
+    : (inner_bottom - inner_top) ) / 2 - 2;
+    //if ((int)r <= 2) return; 
+    r -= 5;
+    
+
+    /* 3.1 画“圆”*/
+    for (uint16_t i = r; i > r - 3; i--)
+    {
+      
+      lcd_draw_circle(cx, cy, i, YELLOW);
+    }
+    lcd_fill(inner_left, inner_top + h / 2, inner_right - w / 2, inner_bottom, fill_color);
+    
+
+    /* 3.2 在右上断口处画一个小三角箭头，方向顺时针 */
+
+    // 选一个靠近右上的参考点
+    uint16_t ax = cx;
+    uint16_t ay = cy + r;
+
+    uint16_t ah = (h / 5);    // 箭头高度
+    if (ah < 4) ah = 4;
+
+    // 三角形三个点：尖端朝圆心，底边朝外
+    int16_t tip_x = ax - ah;          // 尖端靠内
+    int16_t tip_y = ay;
+    int16_t b1_x  = ax;
+    int16_t b1_y  = ay - ah / 2;
+    int16_t b2_x  = ax;
+    int16_t b2_y  = ay + ah / 2;
+
+    for (int16_t xx = tip_x; xx <= b1_x; ++xx)
+    {
+        float t = (float)(xx - tip_x) / (float)(b1_x - tip_x + 1);
+        int16_t y_top = (int16_t)(tip_y + t * (b1_y - tip_y));
+        int16_t y_bot = (int16_t)(tip_y + t * (b2_y - tip_y));
+        if (y_top > y_bot) {
+            int16_t tmp = y_top; y_top = y_bot; y_bot = tmp;
+        }
+
+        for (int16_t yy = y_top; yy <= y_bot; ++yy) {
+            if (xx >= inner_left && xx <= inner_right &&
+                yy >= inner_top  && yy <= inner_bottom) {
+                lcd_draw_point(xx, yy, arrow_color);
+            }
+        }
+    }
+}
+
 
 
 /* 10个触控点的颜色(电容触摸屏用) */
@@ -346,21 +498,23 @@ void ui(){
   lcd_fill(85, 650, 395, 750, RGB565_color(25, 50, 5));
   lcd_draw_rectangle(85, 200, 395, 300, RED);
     
-  lcd_show_string(160, 230, 310, 100, 32, "ShowData", MAGENTA);
-  lcd_show_string(160, 380, 310, 100, 32, "NetWork", MAGENTA);
-  lcd_show_string(160, 530, 310, 100, 32, "Draw", MAGENTA);
+  lcd_show_string(160, 230, 310, 100, 32, "ShowData", BLACK);
+  lcd_show_string(160, 380, 310, 100, 32, "NetWork", BLACK);
+  lcd_show_string(160, 530, 310, 100, 32, "Draw", BLACK);
   
   break;
   case showdata:
     LCD_ShowImage(85, 10, 310, 70, "logo_cdtu");
     lcd_fill(0, 90, 480, 800, GRAYBLUE);
-    lcd_show_string(64, 100, 160, 32, 32,"Temp:   C", MAGENTA);
-    lcd_show_string(64, 150, 160, 32, 32, "Humi:   %", MAGENTA);
-    lcd_show_string(64, 200, 220, 32, 32, "PRESS:      Pa", MAGENTA);
-    lcd_show_string(64, 250, 160, 32, 32, "ALTI:    m", MAGENTA);
-    lcd_show_string(64, 300, 220, 32, 32, "LIGHT:      lx", MAGENTA);
-    lcd_show_string(64, 350, 220, 32, 32, "DIST:    cm", MAGENTA);
+    lcd_show_string(64, 100, 160, 32, 32,"Temp:   C", BLACK);
+    lcd_show_string(64, 150, 160, 32, 32, "Humi:   %", BLACK);
+    lcd_show_string(64, 200, 220, 32, 32, "PRESS:      Pa", BLACK);
+    lcd_show_string(64, 250, 160, 32, 32, "ALTI:    m", BLACK);
+    lcd_show_string(64, 300, 220, 32, 32, "LIGHT:      lx", BLACK);
+    lcd_show_string(64, 350, 220, 32, 32, "DIST:    cm", BLACK);
 
+    lcd_draw_back_icon(80, 450, 60, 40);
+    lcd_draw_refresh_icon(180, 450, 60, 40);
     
 
     break;
@@ -378,6 +532,7 @@ void ui(){
 }
 
 uint8_t num = 1;
+bool is_back_now = 0;
 
 void select()
 {
@@ -387,45 +542,100 @@ void select()
   {
   case up:
     current_opt = n_opt;
-    lcd_draw_rectangle(85, 200 + 150 * (num - 1), 395, 300 + 150 * (num - 1), RGB565_color(25, 50, 5));
-    num--;
+    if (current_page == home)
+    {
+      lcd_draw_rectangle(85, 200 + 150 * (num - 1), 395, 300 + 150 * (num - 1), RGB565_color(25, 50, 5));
+      num--;
+    }
+    
+    
     break;
+    
   case down:
     current_opt = n_opt;
-    lcd_draw_rectangle(85, 200 + 150 * (num - 1), 395, 300 + 150 * (num - 1), RGB565_color(25, 50, 5));
-    num++;
+    if (current_page  == home)
+    {
+      lcd_draw_rectangle(85, 200 + 150 * (num - 1), 395, 300 + 150 * (num - 1), RGB565_color(25, 50, 5));
+      num++;
+    }
+    
+
     break;
+
+  case left:
+    if (current_page == showdata)
+    { 
+      is_back_now = !is_back_now;
+    }
+
+
+    
+    break;
+
+  case right:
+    if (current_page == showdata)
+    {
+      is_back_now = !is_back_now;
+    }
+
+
+
+
+    break;
+
   case yes:
     current_opt = n_opt;
     lcd_clear(BLACK);
-    switch (num)
+    if(current_page == home)
     {
-    case 1:
-      current_page = showdata;
-      ui();
-      return;
-    case 2:
-      current_page = network;
-      return;
-    case 3:
-      current_page = draw;
-      return; 
-    case 4:
-      current_page = home;
-      //ui();
-      return;
+      switch (num)
+      {
+      case 1:
+        current_page = showdata;
+        ui();
+        return;
+      case 2:
+        current_page = network;
+        ui();
+        return;
+      case 3:
+        current_page = draw;
+        ui();
+        return; 
+      case 4:
+        current_page = home;
+        //ui();
+        return;
     
-    default:
-      return;
+      default:
+        return;
+      }
     }
-
+    if(current_page == showdata)
+    {
+      if(is_back_now) 
+      {
+        is_back_now = 0;
+        current_page = home;
+      }
+      ui();
+    }
   default:
     break;
   }
   if(num < 1) num = 4;
   if(num > 4) num = 1;
-  lcd_draw_rectangle(85, 200 + 150 * (num - 1), 395, 300 + 150 * (num - 1), RED);
-
+  if(current_page == home) lcd_draw_rectangle(85, 200 + 150 * (num - 1), 395, 300 + 150 * (num - 1), RED);
+  if(current_page == showdata)
+  {
+    if(is_back_now){
+      lcd_draw_rectangle(80, 450, 140, 490, RED);
+      lcd_draw_rectangle(180, 450, 240, 490, WHITE);
+    }else{
+      lcd_draw_rectangle(80, 450, 140, 490, WHITE);
+      lcd_draw_rectangle(180, 450, 240, 490, RED);
+    }
+  }
 }
 
 
@@ -525,27 +735,27 @@ int main(void)
   KEY_Init();
 
   if(SHT30_Check())
-    {
+  {
       SHT30_Read_SingleShot(&T, &H);
-    }
-    else
-    {
+  }
+  else
+  {
       T = -1;
       H = -1;
       HAL_GPIO_TogglePin(GPIOF, GPIO_PIN_10);
-    }
+  }
 
-    if(BMP280_Init() == BMP280_OK)
-    {
+  if(BMP280_Init() == BMP280_OK)
+  {
       BMP280_ReadTempPressure(&T, &P);
       A = (int)BMP280_CalcAltitude(P, 101325.0f);
-    }
-    else
-    {
+  }
+  else
+  {
       P = -1;
       A = -1;
       HAL_GPIO_TogglePin(GPIOF, GPIO_PIN_10);
-    }
+  }
 
     BH1750_PowerOn();
     BH1750_Reset();
@@ -588,10 +798,19 @@ int main(void)
             current_opt = down;
             select();
           }
+          if(ev.id == KEY_LEFT && ev.type == KEY_EVT_RELEASE){
+            current_opt = left;
+            select();
+          }
+          if(ev.id == KEY_RIGHT && ev.type == KEY_EVT_RELEASE){
+            current_opt = right;
+            select();
+          }
           if(ev.id == KEY_OK && ev.type == KEY_EVT_RELEASE){
             current_opt = yes;
             select();
           }
+
         }
     }
     
@@ -605,7 +824,6 @@ int main(void)
         L = 0;
         P = 0;
         A = 0;
-        D = 0;
         tick_prev = HAL_GetTick();
         if (SHT30_Read_SingleShot(&T, &H) != 0)
         {
@@ -635,14 +853,14 @@ int main(void)
         lcd_fill(170, 200, 250, 232, GRAYBLUE);
         lcd_fill(150, 250, 200, 282, GRAYBLUE);
         lcd_fill(170, 300, 250, 332, GRAYBLUE);
-        lcd_fill(150, 350, 220, 382, GRAYBLUE);
+        lcd_fill(150, 350, 200, 382, GRAYBLUE);
       
-        lcd_show_xnum(150, 100, T, 2, 32, 1, MAGENTA);
-        lcd_show_xnum(150, 150, H, 2, 32, 1, MAGENTA);
-        lcd_show_xnum(170, 200, P, 5, 32, 1, MAGENTA);
-        lcd_show_xnum(150, 250, A, 3, 32, 1, MAGENTA);
-        lcd_show_xnum(170, 300, L, 5, 32, 1, MAGENTA);
-        lcd_show_xnum(150, 350, D, 3, 32, 1, MAGENTA);
+        lcd_show_xnum(150, 100, T, 2, 32, 1, BLACK);
+        lcd_show_xnum(150, 150, H, 2, 32, 1, BLACK);
+        lcd_show_xnum(170, 200, P, 5, 32, 1, BLACK);
+        lcd_show_xnum(150, 250, A, 3, 32, 1, BLACK);
+        lcd_show_xnum(170, 300, L, 5, 32, 1, BLACK);
+        lcd_show_xnum(150, 350, D, 3, 32, 1, BLACK);
       }
 
 

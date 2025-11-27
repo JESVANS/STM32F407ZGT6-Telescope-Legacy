@@ -929,10 +929,16 @@ void lcd_draw_hline(uint16_t x, uint16_t y, uint16_t len, uint16_t color)
 
 void lcd_draw_rectangle(uint16_t x1, uint16_t y1, uint16_t x2, uint16_t y2, uint16_t color)
 {
-    lcd_draw_line(x1, y1, x2, y1, color);
-    lcd_draw_line(x1, y1, x1, y2, color);
-    lcd_draw_line(x1, y2, x2, y2, color);
-    lcd_draw_line(x2, y1, x2, y2, color);
+    uint16_t i = 3;
+    while (i--)
+    {
+        lcd_draw_line(x1, y1 + i, x2, y1 + i, color);
+        lcd_draw_line(x1 + i, y1, x1 + i, y2, color);
+        lcd_draw_line(x1, y2 - i, x2, y2 - i, color);
+        lcd_draw_line(x2 - i, y1, x2 - i, y2, color);
+    }
+    
+   
 }
 
 void lcd_draw_circle(uint16_t x0, uint16_t y0, uint8_t r, uint16_t color)
