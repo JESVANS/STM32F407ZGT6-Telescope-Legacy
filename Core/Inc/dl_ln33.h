@@ -64,6 +64,17 @@ DL_Status_t DL_LN33_BuildFrame(uint8_t src, uint8_t dst, uint16_t addr,
                                const uint8_t *payload, uint16_t payload_len,
                                uint8_t **frame_out, uint16_t *frame_len_out);
 
+
+/**
+ * @brief   //数据拆分装填函数
+ * @param content  数据内容指针(数组)
+ * @param content_p  内容长度(外部指针)**
+ * @param data  需要装填的数据
+ * @return DL_Status_t
+ */
+DL_Status_t DL_LN33_Load_Data(uint8_t *content, uint8_t content_p, int data);
+
+
 /**
  * @brief 阻塞式发送数据包 (自动封包并发送)
  * @param src 源端口

@@ -43,7 +43,7 @@ BT_Status_t BT_Init(BT_Handle_t *hbt_in)
     /* STATE 输入 */
     gpio.Pin  = hbt->STATE_Pin;
     gpio.Mode = GPIO_MODE_INPUT;
-    gpio.Pull = GPIO_NOPULL;
+    gpio.Pull = GPIO_PULLDOWN;
     HAL_GPIO_Init(hbt->STATE_Port, &gpio);
 
     hbt->initialized = 1;
@@ -212,10 +212,10 @@ BT_Status_t BT_Receive(BT_Handle_t *hbt_in, uint8_t *buf, uint16_t len, uint32_t
 //     return st;
 // }
 
-BT_ConnState_t BT_GetState(BT_Handle_t *hbt_in)
+uint8_t BT_GetState(BT_Handle_t *hbt_in)
 {
     BT_Handle_t *hbt = _handle(hbt_in);
-    if (!hbt || !hbt->initialized) return BT_DISCONNECTED;
+    if (!hbt || !hbt->initialized) return 0;
     return (HAL_GPIO_ReadPin(hbt->STATE_Port, hbt->STATE_Pin) == GPIO_PIN_SET)
-            ? BT_CONNECTED : BT_DISCONNECTED;
+            ? 1 : 0;
 }

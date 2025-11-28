@@ -68,7 +68,7 @@ BT_Status_t BT_Send(BT_Handle_t *hbt, const uint8_t *data, uint16_t len, uint32_
 BT_Status_t BT_Receive(BT_Handle_t *hbt, uint8_t *buf, uint16_t len, uint32_t timeout_ms);
 
 /* 读取连接状态（直接读 STATE 引脚） */
-BT_ConnState_t BT_GetState(BT_Handle_t *hbt);
+uint8_t BT_GetState(BT_Handle_t *hbt);
 
 /*
 !!注意!!

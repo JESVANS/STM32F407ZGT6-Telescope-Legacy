@@ -469,7 +469,7 @@ void lcd_ex_nt35510_reginit(void)
 
 /* LCD的画笔颜色和背景色 */
 uint32_t g_point_color = 0xF800;    /* 画笔颜色 */
-uint32_t g_back_color  = 0xffff;    /* 背景色 */
+uint32_t g_back_color  = GRAYBLUE;    /* 背景色 */
 
 /* 管理LCD重要参数 */
 _lcd_dev lcddev;

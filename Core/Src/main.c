@@ -79,7 +79,7 @@
   static volatile uint8_t  resp_updated = 0;
   const char *msg = "HELLO FROM STM32 !";
   const uint8_t pkg[128] = {0};
-  const uint8_t content[] = {123};
+  uint8_t content[128] = {0};//temp,hum,light,press,alt,dist
 
 
   char resp[128];
@@ -482,7 +482,8 @@ static void show_key_event(const KeyEvent_t *ev)
     lcd_show_string(200, 760, 220, 32, 32, key_evt_buf, CYAN);
 }
 
-
+bool is_zigbee_connected = 0;
+uint8_t no_respond_times = 0;
 
 void ui(){
   
@@ -501,11 +502,13 @@ void ui(){
   lcd_show_string(160, 230, 310, 100, 32, "ShowData", BLACK);
   lcd_show_string(160, 380, 310, 100, 32, "NetWork", BLACK);
   lcd_show_string(160, 530, 310, 100, 32, "Draw", BLACK);
+  lcd_show_string(160, 680, 310, 100, 32, "Camera", GRAY);
   
   break;
   case showdata:
     LCD_ShowImage(85, 10, 310, 70, "logo_cdtu");
     lcd_fill(0, 90, 480, 800, GRAYBLUE);
+    lcd_draw_circle(190, 105, 2, BLACK);
     lcd_show_string(64, 100, 160, 32, 32,"Temp:   C", BLACK);
     lcd_show_string(64, 150, 160, 32, 32, "Humi:   %", BLACK);
     lcd_show_string(64, 200, 220, 32, 32, "PRESS:      Pa", BLACK);
@@ -519,13 +522,26 @@ void ui(){
 
     break;
   case network:
-
+    LCD_ShowImage(85, 10, 310, 70, "logo_cdtu");
+    lcd_fill(0, 90, 480, 800, GRAYBLUE);
+    lcd_show_string(200, 100, 200, 32, 32, "Network", BLACK);
+    lcd_show_string(50, 150, 300, 24, 24, "Bluetooth Status:", BLACK);
+    lcd_show_string(50, 200, 300, 24, 24, "ZigBee Received Frame:", BLACK);
+    lcd_show_string(50, 250, 300, 24, 24, "LoRa Status:", BLACK);
+    lcd_show_string(50, 275, 300, 24, 24, "Disconnected", RED);
+    lcd_show_string(50, 300, 300, 24, 24, "WiFi Status:", BLACK);
+    lcd_show_string(50, 325, 300, 24, 24, "Disconnected", RED);
+    lcd_show_string(50, 350, 300, 24, 24, "LTE Status:", BLACK);
+    lcd_show_string(50, 375, 300, 24, 24, "Disconnected", RED);
+    lcd_draw_back_icon(30, 90, 60, 40);
+    lcd_draw_refresh_icon(130, 90, 60, 40);
     break;
   case draw:
     //lcd_clear(WHITE);
     LCD_ShowImage(85, 10, 310, 70, "logo_cdtu");
     lcd_fill(0, 90, 480, 800, GRAYBLUE);
     lcd_fill(0, 131, 480, 800, WHITE);
+    lcd_show_string(250, 100, 200, 24, 24, "Draw Area:", BLACK);
     lcd_draw_back_icon(30, 90, 60, 40);
     lcd_draw_refresh_icon(130, 90, 60, 40);
     break;
@@ -552,8 +568,6 @@ void select()
       lcd_draw_rectangle(85, 200 + 150 * (num - 1), 395, 300 + 150 * (num - 1), RGB565_color(25, 50, 5));
       num--;
     }
-    
-    
     break;
     
   case down:
@@ -563,29 +577,20 @@ void select()
       lcd_draw_rectangle(85, 200 + 150 * (num - 1), 395, 300 + 150 * (num - 1), RGB565_color(25, 50, 5));
       num++;
     }
-    
-
     break;
 
   case left:
-    if (current_page == showdata  || current_page == draw)
+    if (current_page == showdata  || current_page == draw || current_page == network)
     { 
       is_back_now = !is_back_now;
     }
-
-
-    
     break;
 
   case right:
-    if (current_page == showdata  || current_page == draw)
+    if (current_page == showdata  || current_page == draw || current_page == network)
     {
       is_back_now = !is_back_now;
     }
-
-
-
-
     break;
 
   case yes:
@@ -627,7 +632,7 @@ void select()
       ui();
     }
 
-    if(current_page == draw)
+    if(current_page == draw || current_page == network)
     {
       if(is_back_now) 
       {
@@ -636,7 +641,6 @@ void select()
         current_page = home;
       }
       ui();
-
     }
   default:
     break;
@@ -654,9 +658,7 @@ void select()
       lcd_draw_rectangle(180, 450, 240, 490, RED);
     }
   }
-
-
-  if(current_page == draw)
+  if(current_page == draw || current_page == network)
   {
     if(is_back_now){
       lcd_draw_rectangle(30, 90, 90, 130, RED);
@@ -679,7 +681,7 @@ static void LCD_ShowBTMessageCenter(const char *s)
     uint16_t screen_h = lcddev.height;
 
     uint16_t char_w = 16;  // 如用 16x16 字体
-    uint16_t char_h = 24;  // 行高可适当大一点
+    uint16_t char_h = 20;  // 行高可适当大一点
 
     uint16_t len = strlen(s);
     if (len > (screen_w / char_w)) {
@@ -688,10 +690,10 @@ static void LCD_ShowBTMessageCenter(const char *s)
 
     uint16_t text_w = len * char_w;
     uint16_t x = (screen_w - text_w) / 2;
-    uint16_t y = (screen_h - char_h) / 2;   // 垂直居中
+    uint16_t y = (screen_h - char_h) / 2 - 163;   // 垂直居中
 
     /* 先清除一条中间区域，再画字 */
-    lcd_fill(0, y, screen_w - 1, y + char_h + 4, BLACK);
+    lcd_fill(0, y, screen_w - 1, y + char_h, BLACK);
     lcd_show_string(x, y, text_w, char_h, 16, (char*)s, WHITE);
 }
 
@@ -757,7 +759,7 @@ int main(void)
   // ssd1306_UpdateScreen();
   int number = 0;
 
-  // BT_Init(NULL);
+  BT_Init(NULL);
   // UART_IT_StartRecv(hBluetooth.huart, 1);
   DL_LN33_InitIT();
 
@@ -809,6 +811,39 @@ int main(void)
   /* USER CODE BEGIN WHILE */
   while (1)
   {
+    /* === 检查是否有 LN33 模块发来的完整帧 === */
+    if (DL_LN33_IsRxFrameReady())
+    {
+      is_zigbee_connected = 1;
+      no_respond_times = 0;
+        uint8_t raw_frame[128];
+        uint16_t rlen = DL_LN33_GetRxFrame(raw_frame, sizeof(raw_frame));
+        if (rlen > 0)
+        {
+            /* 把原始帧转成十六进制字符串，例如 "FE 05 91 21 00 00 01 FF" */
+            bytes_to_hex_str(raw_frame, rlen, disp_buf, sizeof(disp_buf));
+            DL_Packet_t receive_pkg;
+            DL_LN33_Read_data(raw_frame, rlen, &receive_pkg);  // 提取包中实际数据
+            //lcd_show_string(10, 700, 400, 32, 24, "Received LN33 Packet Data:", MAGENTA);
+            //lcd_show_xnum(350, 700, receive_pkg.data[0], 5, 24, 1, MAGENTA); //以十进制显示数据
+            usart2_has_new = 1;   // 通知下面的显示逻辑更新屏幕
+            T = receive_pkg.data[0];
+            H = receive_pkg.data[1];
+            P = receive_pkg.data[2] + receive_pkg.data[3] * 100 +receive_pkg.data[4] * 10000;
+            A = receive_pkg.data[5] + receive_pkg.data[6] * 100;
+            L = receive_pkg.data[7] + receive_pkg.data[8] * 100;
+            D = receive_pkg.data[9] + receive_pkg.data[10] * 100;
+        }
+    }
+    else
+    {
+      no_respond_times = 1;
+      //is_zigbee_connected = 0;
+    }
+
+
+
+
     static uint32_t prev = 0;
     if (HAL_GetTick() - prev >= 10)
     {
@@ -849,15 +884,15 @@ int main(void)
     if (HAL_GetTick() - tick_prev >= 1200)
     {
 
-        T = 0;
-        H = 0;
-        L = 0;
-        P = 0;
-        A = 0;
+        // T = 0;
+        // H = 0;
+        // L = 0;
+        // P = 0;
+        // A = 0;
         tick_prev = HAL_GetTick();
         if (SHT30_Read_SingleShot(&T, &H) != 0)
         {
-            T = -1; H = -1;
+            // T = -1; H = -1;
             HAL_GPIO_TogglePin(GPIOF, GPIO_PIN_10);
         }
         BMP280_ReadTempPressure(&T, &P);
@@ -870,13 +905,33 @@ int main(void)
 
        uint8_t *frame = NULL;
        uint16_t frame_len = 0;
-       DL_LN33_BuildFrame(DL_LOCAL_PORT, 0x90, 0xbd1d, content, sizeof(content), &frame, &frame_len);
+       uint8_t content_p = 0;
+        //DL_LN33_Load_Data(content, content_p, (int)T);
+        // DL_LN33_Load_Data(content, content_p, H);
+        // DL_LN33_Load_Data(content, content_p, P);
+        // DL_LN33_Load_Data(content, content_p, A);
+        // DL_LN33_Load_Data(content, content_p, L);
+        // DL_LN33_Load_Data(content, content_p, D);
+        //temp,hum,press,alt,light,dist
+        content[0] = (uint8_t)T;
+        content[1] = (uint8_t)H;
+        content[2] = (uint8_t)((int)P%100);
+        content[3] = (uint8_t)(((int)P/100)%100);
+        content[4] = (uint8_t)(((int)P/10000)%100);
+        content[5] = (uint8_t)(((int)A)%100);
+        content[6] = (uint8_t)(((int)A/100)%100);
+        content[7] = (uint8_t)(((int)L)%100);
+        content[8] = (uint8_t)(((int)L/100)%100);
+        content[9] = (uint8_t)(((int)D)%100);
+        content[10] = (uint8_t)(((int)D/100)%100);
+
+       //DL_LN33_BuildFrame(DL_LOCAL_PORT, 0x90, 0xffff, content, 11, &frame, &frame_len);
        //DL_LN33_SendFrameIT(DL_LN33_DEFAULT_UART, frame, frame_len);
 
 
 
 
-       if(current_page == showdata)
+      if(current_page == showdata)
       {
         lcd_fill(150, 100, 180, 132, GRAYBLUE); 
         lcd_fill(150, 150, 180, 182, GRAYBLUE);
@@ -893,30 +948,25 @@ int main(void)
         lcd_show_xnum(150, 350, D, 3, 32, 1, BLACK);
       }
 
+      if(current_page == network)
+      {
+        lcd_fill(255, 150, 455, 174, GRAYBLUE); 
+        if(BT_GetState(&hBluetooth)) lcd_show_string(255, 150, 200, 24, 24, "Connected!", BLACK);
+        else lcd_show_string(255, 150, 200, 24, 24, "Disconnected.", RED);
+
+        if (usart2_has_new)
+        {
+          usart2_has_new = 0;
+          LCD_ShowBTMessageCenter(disp_buf);   // 屏幕显示收到的内容
+        }
+      }
 
     } 
     
-    /* === 检查是否有 LN33 模块发来的完整帧 === */
-    if (DL_LN33_IsRxFrameReady()) {
-        uint8_t raw_frame[128];
-        uint16_t rlen = DL_LN33_GetRxFrame(raw_frame, sizeof(raw_frame));
-        if (rlen > 0) {
-            /* 把原始帧转成十六进制字符串，例如 "FE 05 91 21 00 00 01 FF" */
-            bytes_to_hex_str(raw_frame, rlen, disp_buf, sizeof(disp_buf));
-            DL_Packet_t receive_pkg;
-            DL_LN33_Read_data(raw_frame, rlen, &receive_pkg);  // 提取包中实际数据
-            lcd_show_string(10, 700, 400, 32, 24, "Received LN33 Packet Data:", MAGENTA);
-            lcd_show_xnum(350, 700, receive_pkg.data[0], 5, 24, 0, MAGENTA); //以十进制显示数据
-            usart2_has_new = 1;   // 通知下面的显示逻辑更新屏幕
-        }
-    }
+    
 
 
-    if (usart2_has_new)
-    {
-        usart2_has_new = 0;
-        LCD_ShowBTMessageCenter(disp_buf);   // 屏幕显示收到的内容
-    }
+    
 		
     
 
@@ -1005,7 +1055,7 @@ int main(void)
                   }
                   if (tp_dev.x[t] > 85 && tp_dev.x[t] < 395 && tp_dev.y[t] > 350 && tp_dev.y[t] < 450)
                   {
-                      //current_page = network;
+                      current_page = network;
                       ui();
                   }
                   if (tp_dev.x[t] > 85 && tp_dev.x[t] < 395 && tp_dev.y[t] > 500 && tp_dev.y[t] < 600)
@@ -1051,6 +1101,30 @@ int main(void)
        HAL_Delay(5);
     }
 
+    if(current_page == network)
+    {
+      for (t = 0; t < maxp; t++)
+        {
+            if ((tp_dev.sta) & (1 << t))
+            {
+                if (tp_dev.x[t] > 130 && tp_dev.x[t] < 190 && tp_dev.y[t] > 90 && tp_dev.y[t] < 130)
+                  {
+                      ui();
+                  }
+                   if (tp_dev.x[t] > 30 && tp_dev.x[t] < 90 && tp_dev.y[t] > 90 && tp_dev.y[t] < 130)
+                  {
+                      current_page = home;
+                      num = 1;
+                      ui();
+                  }
+            }
+            else 
+            {
+                lastpos[t][0] = 0xFFFF;
+            }
+        }
+       HAL_Delay(5);
+    }
         
        
 

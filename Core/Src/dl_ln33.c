@@ -378,3 +378,28 @@ void DL_LN33_Read_data(const uint8_t *buf, uint16_t len, DL_Packet_t *repkt)
 
 
 
+//数据拆分装填函数
+DL_Status_t DL_LN33_Load_Data(uint8_t *content, uint8_t content_p, int data)
+{
+    
+    if(data > 0)
+       {
+        uint8_t part = 1;
+        content_p++;
+        while (data > 99)
+        {
+          content[content_p] = data % 100;
+          content_p++;
+          data = data / 100;
+          part++;
+        }
+        content[content_p] = data;
+        content[content_p - part] = part;
+        content_p++;
+        return DL_OK;
+       }
+    return DL_INVALID;
+}
+
+
+
