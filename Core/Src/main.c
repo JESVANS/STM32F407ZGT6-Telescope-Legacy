@@ -522,7 +522,12 @@ void ui(){
 
     break;
   case draw:
-
+    //lcd_clear(WHITE);
+    LCD_ShowImage(85, 10, 310, 70, "logo_cdtu");
+    lcd_fill(0, 90, 480, 800, GRAYBLUE);
+    lcd_fill(0, 131, 480, 800, WHITE);
+    lcd_draw_back_icon(30, 90, 60, 40);
+    lcd_draw_refresh_icon(130, 90, 60, 40);
     break;
 
   default:
@@ -536,7 +541,7 @@ bool is_back_now = 0;
 
 void select()
 {
-  uint8_t start_x =85;
+  uint8_t start_x = 85;
   uint8_t start_y = 200;
   switch (current_opt)
   {
@@ -563,7 +568,7 @@ void select()
     break;
 
   case left:
-    if (current_page == showdata)
+    if (current_page == showdata  || current_page == draw)
     { 
       is_back_now = !is_back_now;
     }
@@ -573,7 +578,7 @@ void select()
     break;
 
   case right:
-    if (current_page == showdata)
+    if (current_page == showdata  || current_page == draw)
     {
       is_back_now = !is_back_now;
     }
@@ -616,9 +621,22 @@ void select()
       if(is_back_now) 
       {
         is_back_now = 0;
+        num = 1;
         current_page = home;
       }
       ui();
+    }
+
+    if(current_page == draw)
+    {
+      if(is_back_now) 
+      {
+        is_back_now = 0;
+        num = 1;
+        current_page = home;
+      }
+      ui();
+
     }
   default:
     break;
@@ -634,6 +652,18 @@ void select()
     }else{
       lcd_draw_rectangle(80, 450, 140, 490, WHITE);
       lcd_draw_rectangle(180, 450, 240, 490, RED);
+    }
+  }
+
+
+  if(current_page == draw)
+  {
+    if(is_back_now){
+      lcd_draw_rectangle(30, 90, 90, 130, RED);
+      lcd_draw_rectangle(130, 90, 190, 130, WHITE);
+    }else{
+      lcd_draw_rectangle(30, 90, 90, 130, WHITE);
+      lcd_draw_rectangle(130, 90, 190, 130, RED);
     }
   }
 }
@@ -921,11 +951,13 @@ int main(void)
 
     tp_dev.scan(0);
 
-        for (t = 0; t < maxp; t++)
+    if(current_page == draw)
+    {
+      for (t = 0; t < maxp; t++)
         {
             if ((tp_dev.sta) & (1 << t))
             {
-                if (tp_dev.x[t] < lcddev.width && tp_dev.y[t] < 540)  /* 坐标在屏幕范围内 */
+                if (tp_dev.x[t] < lcddev.width && tp_dev.y[t] < lcddev.height && tp_dev.y[t] > 135)  /* 坐标在屏幕范围内 */
                 {
                     if (lastpos[t][0] == 0xFFFF)
                     {
@@ -937,19 +969,89 @@ int main(void)
                     lastpos[t][0] = tp_dev.x[t];
                     lastpos[t][1] = tp_dev.y[t];
 
-                    if (tp_dev.x[t] > (lcddev.width - 24) && tp_dev.y[t] < 20)
-                    {
-                        load_draw_dialog();/* 清除 */
-                    }
-                }
+                  }
+                  if (tp_dev.x[t] > 130 && tp_dev.x[t] < 190 && tp_dev.y[t] > 90 && tp_dev.y[t] < 130)
+                  {
+                      //load_draw_dialog();/* 清除 */
+                      lcd_fill(0, 133, 480, 800, WHITE);
+                      //ui();
+                      //HAL_Delay(300);
+                  }
+                   if (tp_dev.x[t] > 30 && tp_dev.x[t] < 90 && tp_dev.y[t] > 90 && tp_dev.y[t] < 130)
+                  {
+                      current_page = home;
+                      num = 1;
+                      ui();
+                  }
             }
             else 
             {
                 lastpos[t][0] = 0xFFFF;
             }
         }
-
        HAL_Delay(5);
+    }
+
+    if(current_page == home)
+    {
+      for (t = 0; t < maxp; t++)
+        {
+            if ((tp_dev.sta) & (1 << t))
+            {
+                  if (tp_dev.x[t] > 85 && tp_dev.x[t] < 395 && tp_dev.y[t] > 200 && tp_dev.y[t] < 300)
+                  {
+                      current_page = showdata;
+                      ui();
+                  }
+                  if (tp_dev.x[t] > 85 && tp_dev.x[t] < 395 && tp_dev.y[t] > 350 && tp_dev.y[t] < 450)
+                  {
+                      //current_page = network;
+                      ui();
+                  }
+                  if (tp_dev.x[t] > 85 && tp_dev.x[t] < 395 && tp_dev.y[t] > 500 && tp_dev.y[t] < 600)
+                  {
+                      current_page = draw;
+                      ui();
+                  }
+                  if (tp_dev.x[t] > 85 && tp_dev.x[t] < 395 && tp_dev.y[t] > 650 && tp_dev.y[t] < 750)
+                  {
+
+                  }
+            }
+            else 
+            {
+                lastpos[t][0] = 0xFFFF;
+            }
+        }
+       HAL_Delay(5);
+    }
+  
+    if(current_page == showdata)
+    {
+      for (t = 0; t < maxp; t++)
+        {
+            if ((tp_dev.sta) & (1 << t))
+            {
+                  if (tp_dev.x[t] > 180 && tp_dev.x[t] < 240 && tp_dev.y[t] > 450 && tp_dev.y[t] < 490)
+                  {
+                      ui();
+                  }
+                  if (tp_dev.x[t] > 80 && tp_dev.x[t] < 140 && tp_dev.y[t] > 450 && tp_dev.y[t] < 490)
+                  {
+                      current_page = home;
+                      num = 1;
+                      ui();
+                  }
+            }
+            else 
+            {
+                lastpos[t][0] = 0xFFFF;
+            }
+        }
+       HAL_Delay(5);
+    }
+
+        
        
 
 
